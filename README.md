@@ -2,13 +2,38 @@
 
 A privacy-focused, offline-capable web application for learning and recognizing sign language using your webcam.
 
+## � Tech Stack
+
+**Frontend & UI**
+- **Framework**: [Next.js 16](https://nextjs.org/) (React 19, Turbopack)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Components**: [shadcn/ui](https://ui.shadcn.com/) (Radix UI)
+- **Icons**: [Lucide React](https://lucide.dev/)
+
+**Machine Learning (Browser)**
+- **Vision**: [MediaPipe Tasks](https://developers.google.com/mediapipe) (Hand & Pose Landmarkers)
+- **Inference**: [TensorFlow.js](https://www.tensorflow.org/js) (WASM backend for performance)
+- **Database**: IndexedDB (via `idb`) for local dataset storage
+
+**Tools & Scripts**
+- **Runtime**: Node.js (Training scripts), Python (WLASL Dataset Import)
+- **Python Libs**: `opencv-python`, `mediapipe`, `numpy`
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
+
+**Web App (Node.js)**
 ```bash
 pnpm install
 ```
-> **Note**: If you see errors about `tfjs-node`, ignore them. The training script will automatically fall back to the standard JS backend.
+
+**Python Tools (Optional - for advanced dataset import)**
+```bash
+pip install -r requirements.txt
+```
 
 ### 2. Run the App
 ```bash
