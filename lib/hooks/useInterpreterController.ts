@@ -8,6 +8,8 @@ import { SignClassifier } from "@/lib/model/inference";
 import { saveSample, exportDataset, clearDatabase } from "@/lib/storage/datasetStore";
 import { HandLandmarkerResult, PoseLandmarkerResult } from "@mediapipe/tasks-vision";
 import { HandLandmarker, PoseLandmarker } from "@mediapipe/tasks-vision";
+import { SIGN_LANGUAGES, DEFAULT_LANGUAGE, SignLanguageKey } from "@/lib/signLanguages";
+import { useSearchParams } from "next/navigation";
 
 export function useInterpreterController() {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -36,29 +38,38 @@ export function useInterpreterController() {
     const classifierRef = useRef<SignClassifier | null>(null);
     const requestRef = useRef<number>(0);
 
+    const searchParams = useSearchParams();
+    const currentLang = (searchParams.get("lang") as SignLanguageKey) || DEFAULT_LANGUAGE;
+    const currentConfig = SIGN_LANGUAGES[currentLang] || SIGN_LANGUAGES[DEFAULT_LANGUAGE];
+
     useEffect(() => {
         async function load() {
             try {
-                setStatus("Loading vision models...");
-                const [hand, pose] = await Promise.all([
-                    getHandLandmarker(),
-                    getPoseLandmarker(),
-                ]);
-                handLandmarkerRef.current = hand;
-                poseLandmarkerRef.current = pose;
-                featureProcessorRef.current = new FeatureProcessor();
+                setStatus(`Loading ${currentConfig.name} models...`);
+                // Only load vision models if not already loaded (optimization)
+                if (!handLandmarkerRef.current) {
+                    const [hand, pose] = await Promise.all([
+                        getHandLandmarker(),
+                        getPoseLandmarker(),
+                    ]);
+                    handLandmarkerRef.current = hand;
+                    poseLandmarkerRef.current = pose;
+                    featureProcessorRef.current = new FeatureProcessor();
+                }
 
-                // Load Classifier
+                // Load Classifier (Always reload on lang change)
+                setIsClassifierReady(false);
                 const classifier = new SignClassifier();
-                const loaded = await classifier.load();
+                const loaded = await classifier.load(currentConfig.modelDir);
                 if (loaded) {
                     classifierRef.current = classifier;
                     setIsClassifierReady(true);
-                    console.log("Classifier loaded");
-                    setStatus("Models ready (Vision + Classifier).");
+                    console.log(`Classifier loaded: ${currentConfig.name}`);
+                    setStatus(`Ready (${currentConfig.name})`);
                 } else {
                     console.log("Classifier not found (train model first)");
-                    setStatus("Vision ready. Classifier not found (Record & Train).");
+                    setStatus(`Vision ready. No model for ${currentConfig.name}.`);
+                    classifierRef.current = null;
                 }
 
                 setModelLoaded(true);
@@ -71,7 +82,7 @@ export function useInterpreterController() {
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, []);
+    }, [currentLang]);
 
     const draw = (handResult: HandLandmarkerResult, poseResult: PoseLandmarkerResult) => {
         const ctx = canvasRef.current?.getContext("2d");
@@ -174,6 +185,9 @@ export function useInterpreterController() {
         } else {
             setStatus("Starting camera...");
             try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("Camera API not supported in this browser");
+                }
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { width: 640, height: 480 },
                 });

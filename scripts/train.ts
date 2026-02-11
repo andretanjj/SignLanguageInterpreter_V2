@@ -4,41 +4,46 @@ import path from 'path';
 import { loadDatasets } from './dataset/loadDataset';
 import { processDataset } from './dataset/normalizeDataset';
 
-// Default datasets to look for
-const DEFAULT_DATASETS = [
-    'dataset.json',
-    'wlasl_dataset.jsonl.gz'
-];
-
-const OUTPUT_DIR = path.resolve(__dirname, '../public/models/signmeup');
-
-// Parse CLI args for --dataset
+// Parse CLI args
 const args = process.argv.slice(2);
-let datasetPaths: string[] = [];
-for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--dataset' && args[i + 1]) {
-        datasetPaths.push(args[i + 1]);
-        i++;
-    }
-}
+const getArg = (flag: string) => {
+    const idx = args.indexOf(flag);
+    return idx !== -1 ? args[idx + 1] : null;
+};
 
-// If no args provided, look for defaults
-if (datasetPaths.length === 0) {
+const datasetArg = getArg('--dataset');
+const outDirArg = getArg('--outDir');
+const langArg = getArg('--lang');
+
+// Default behavior if no args (backward compatibility)
+const DEFAULT_DATASETS = ['dataset.json', 'wlasl_dataset.jsonl.gz'];
+const DEFAULT_OUTPUT_DIR = path.resolve(__dirname, '../public/models/signmeup');
+
+let datasetPaths: string[] = [];
+let outputDir = outDirArg ? path.resolve(__dirname, `../${outDirArg}`) : DEFAULT_OUTPUT_DIR;
+
+if (datasetArg) {
+    datasetPaths = [datasetArg];
+} else {
+    // Fallback logic
     datasetPaths = DEFAULT_DATASETS.filter(f => fs.existsSync(path.resolve(__dirname, `../${f}`)));
     if (datasetPaths.length === 0) {
-        console.error("No datasets found. Please provide --dataset <path> or ensure dataset.json or wlasl_dataset.jsonl.gz exist.");
+        console.error("No datasets found. Please provide --dataset <path>.");
         process.exit(1);
     }
 }
 
-// Resolve absolute paths
+// Resolve absolute paths for datasets
 const ABS_DATASET_PATHS = datasetPaths.map(p => path.resolve(__dirname, p.startsWith('/') ? p : `../${p}`));
 
-console.log(`Using datasets:`, ABS_DATASET_PATHS);
+console.log(`\n=== SignMeUp Training ===`);
+console.log(`Language Tag: ${langArg || 'auto'}`);
+console.log(`Datasets:     ${ABS_DATASET_PATHS.join(', ')}`);
+console.log(`Output Dir:   ${outputDir}\n`);
 
 // Ensure output dir exists
-if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
 }
 
 // Configuration (must match frontend)
@@ -140,9 +145,10 @@ async function train() {
 
     console.log('Computing scaler...');
     const scaler = computeScaler(allFeatures);
-    fs.writeFileSync(path.join(OUTPUT_DIR, 'scaler.json'), JSON.stringify(scaler));
+    fs.writeFileSync(path.join(outputDir, 'scaler.json'), JSON.stringify(scaler));
 
     console.log('Standardizing data...');
+
     const X: number[][][] = [];
     const y: string[] = [];
 
@@ -162,7 +168,7 @@ async function train() {
     }
 
     const labelMap = new Map(uniqueLabels.map((l, i) => [l, i]));
-    fs.writeFileSync(path.join(OUTPUT_DIR, 'labels.json'), JSON.stringify(uniqueLabels));
+    fs.writeFileSync(path.join(outputDir, 'labels.json'), JSON.stringify(uniqueLabels));
 
     const ys = y.map(l => labelMap.get(l)!);
 
@@ -201,8 +207,8 @@ async function train() {
 
     console.log('Saving model...');
     // Use custom saver
-    await model.save(nodeFileSystemRouter(OUTPUT_DIR) as tf.io.IOHandler);
-    console.log(`Model saved to ${OUTPUT_DIR}`);
+    await model.save(nodeFileSystemRouter(outputDir) as tf.io.IOHandler);
+    console.log(`Model saved to ${outputDir}`);
 }
 
 train().catch(console.error);

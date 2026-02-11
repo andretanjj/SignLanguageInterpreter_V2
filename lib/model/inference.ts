@@ -15,23 +15,23 @@ export class SignClassifier {
     private lastPredictions: string[] = [];
     private smoothingWindow = 5;
 
-    async load() {
+    async load(modelDir: string = '/models/signmeup') {
         try {
             // Load Model
-            this.model = await tf.loadLayersModel('/models/signmeup/model.json');
+            this.model = await tf.loadLayersModel(`${modelDir}/model.json`);
 
             // Load Labels
-            const labelsReq = await fetch('/models/signmeup/labels.json');
+            const labelsReq = await fetch(`${modelDir}/labels.json`);
             this.labels = await labelsReq.json();
 
             // Load Scaler
-            const scalerReq = await fetch('/models/signmeup/scaler.json');
+            const scalerReq = await fetch(`${modelDir}/scaler.json`);
             this.scaler = await scalerReq.json();
 
-            console.log('Model and metadata loaded');
+            console.log(`Model loaded from ${modelDir}`);
             return true;
         } catch (e) {
-            console.error('Failed to load model artifacts:', e);
+            console.error(`Failed to load model from ${modelDir}:`, e);
             return false;
         }
     }

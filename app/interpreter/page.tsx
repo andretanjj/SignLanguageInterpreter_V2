@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { CameraSetupWizard } from "@/components/CameraSetupWizard"
 import { ScanningKeyboard } from "@/components/ScanningKeyboard"
+import { SignLanguageSelector } from "@/components/SignLanguageSelector"
 import { Camera, RefreshCw, Volume2, Mic, Settings, LayoutGrid, Eye, EyeOff, Save, Trash2, StopCircle, PlayCircle } from "lucide-react"
 
 export default function InterpreterPage() {
@@ -67,6 +68,7 @@ export default function InterpreterPage() {
                     <p className="text-slate-600 font-medium">Assistive Interpreter</p>
                 </div>
                 <div className="flex gap-2">
+                    <SignLanguageSelector />
                     <Button variant="outline" size="icon" onClick={() => setQuickSettingsOpen(!quickSettingsOpen)}>
                         <Settings className="w-6 h-6" />
                     </Button>

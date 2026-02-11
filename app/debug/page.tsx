@@ -8,6 +8,9 @@ import { SignClassifier } from "@/lib/model/inference";
 import { saveSample, exportDataset, clearDatabase } from "@/lib/storage/datasetStore";
 import { HandLandmarkerResult, PoseLandmarkerResult } from "@mediapipe/tasks-vision";
 import { HandLandmarker, PoseLandmarker } from "@mediapipe/tasks-vision";
+import { SignLanguageSelector } from "@/components/SignLanguageSelector";
+import { SIGN_LANGUAGES, DEFAULT_LANGUAGE, SignLanguageKey } from "@/lib/signLanguages";
+import { useSearchParams } from "next/navigation";
 
 export default function DebugPage() {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -52,15 +55,15 @@ export default function DebugPage() {
 
                 // Load Classifier
                 const classifier = new SignClassifier();
-                const loaded = await classifier.load();
+                const loaded = await classifier.load(currentConfig.modelDir);
                 if (loaded) {
                     classifierRef.current = classifier;
                     setIsClassifierReady(true);
                     console.log("Classifier loaded");
-                    setStatus("Models ready (Vision + Classifier).");
+                    setStatus(`Models ready (${currentConfig.name}).`);
                 } else {
                     console.log("Classifier not found (train model first)");
-                    setStatus("Vision ready. Classifier not found (Record & Train).");
+                    setStatus(`Vision ready. Classifier not found for ${currentConfig.name}.`);
                 }
 
                 setModelLoaded(true);
@@ -171,6 +174,10 @@ export default function DebugPage() {
         } else {
             setStatus("Starting camera...");
             try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("Camera API not supported (check HTTPS/localhost)");
+                }
+
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { width: 640, height: 480 },
                 });
@@ -247,66 +254,117 @@ export default function DebugPage() {
     };
 
 
+    const [trainingLogs, setTrainingLogs] = useState<string[]>([]);
+    const [isTraining, setIsTraining] = useState(false);
+    const searchParams = useSearchParams();
+    const currentLang = (searchParams.get("lang") as SignLanguageKey) || DEFAULT_LANGUAGE;
+    const currentConfig = SIGN_LANGUAGES[currentLang] || SIGN_LANGUAGES[DEFAULT_LANGUAGE];
+
+    const handleTrain = async () => {
+        setIsTraining(true);
+        setTrainingLogs(["Starting training...", `Language: ${currentConfig.name}`]);
+
+        try {
+            const res = await fetch("/api/train", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ lang: currentLang })
+            });
+
+            if (!res.ok) throw new Error("Failed to start training");
+            if (!res.body) throw new Error("No response body");
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const text = decoder.decode(value);
+                setTrainingLogs(prev => [...prev, ...text.split("\n").filter(Boolean)]);
+            }
+
+            setTrainingLogs(prev => [...prev, "Done! Reload to use new model."]);
+        } catch (e: any) {
+            setTrainingLogs(prev => [...prev, `Error: ${e.message}`]);
+        } finally {
+            setIsTraining(false);
+        }
+    };
+
     return (
-        <div className="p-4 max-w-4xl mx-auto font-sans">
-            <h1 className="text-3xl font-bold mb-6">SignMeUp Debug</h1>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="relative border-2 border-slate-200 bg-black aspect-[4/3] rounded-lg overflow-hidden">
-                    <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-50" autoPlay playsInline muted />
-                    <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" width={640} height={480} />
-
-                    {prediction && (
-                        <div className="absolute top-4 left-4 bg-black/70 text-white px-4 py-2 rounded text-xl font-bold">
-                            {prediction.label} <span className="text-sm font-normal text-gray-300">({(prediction.prob * 100).toFixed(0)}%)</span>
-                        </div>
-                    )}
+        <div className="p-4 max-w-6xl mx-auto font-sans">
+            <header className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold">SignMeUp Debug</h1>
+                <div className="flex gap-4 items-center">
+                    <span className="text-sm font-medium text-slate-600">Active Language:</span>
+                    <SignLanguageSelector />
                 </div>
+            </header>
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column: Camera */}
                 <div className="space-y-6">
-                    <div className="p-4 border rounded-lg bg-slate-50">
-                        <p className="mb-2">Status: <span className="font-semibold text-blue-600">{status}</span></p>
-                        <div className="flex items-center gap-2">
-                            <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`}></div>
-                            <span className="font-medium">{isRecording ? "RECORDING" : "IDLE"}</span>
-                        </div>
-                        {isRecording && <p className="text-sm text-gray-500 mt-1">Windows captured: {recordCount} (updated on stop)</p>}
+                    <div className="relative border-2 border-slate-200 bg-black aspect-[4/3] rounded-lg overflow-hidden shadow-md">
+                        <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-60" autoPlay playsInline muted />
+                        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" width={640} height={480} />
 
-                        {isClassifierReady && (
-                            <div className="mt-2 text-green-600 font-bold text-sm">
-                                ✓ Model Loaded (Inference Active)
+                        {prediction && (
+                            <div className="absolute top-4 left-4 bg-black/70 text-white px-4 py-2 rounded text-xl font-bold backdrop-blur-sm">
+                                {prediction.label} <span className="text-sm font-normal text-gray-300">({(prediction.prob * 100).toFixed(0)}%)</span>
                             </div>
                         )}
+
+                        <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                            Model: {currentConfig.name}
+                        </div>
                     </div>
 
-                    <button
-                        onClick={toggleCamera}
-                        disabled={!modelLoaded}
-                        className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg disabled:opacity-50 transition-colors"
-                    >
-                        {isCameraRunning ? "Stop Camera" : (modelLoaded ? "Start Camera" : "Loading Models...")}
-                    </button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <button
+                            onClick={toggleCamera}
+                            disabled={!modelLoaded}
+                            className={`w-full px-4 py-3 font-semibold rounded-lg disabled:opacity-50 transition-colors shadow-sm ${isCameraRunning
+                                ? "bg-red-100 text-red-700 hover:bg-red-200"
+                                : "bg-blue-600 hover:bg-blue-700 text-white"
+                                }`}
+                        >
+                            {isCameraRunning ? "Stop Camera" : (modelLoaded ? "Start Camera" : "Loading Models...")}
+                        </button>
+                        <div className="p-4 border rounded-lg bg-white shadow-sm flex flex-col justify-center">
+                            <p className="text-sm text-slate-500 mb-1">System Status</p>
+                            <p className="font-semibold text-blue-600 truncate">{status}</p>
+                        </div>
+                    </div>
+                </div>
 
-                    <div className="border p-6 rounded-lg space-y-4 shadow-sm">
-                        <h2 className="text-xl font-bold">Data Collection</h2>
+                {/* Right Column: Controls & Training */}
+                <div className="space-y-6">
+
+                    {/* Collection Panel */}
+                    <div className="p-6 border rounded-xl bg-white shadow-sm space-y-4">
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
+                            Data Collection
+                        </h2>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Label Name</label>
                             <input
                                 type="text"
                                 value={label}
                                 onChange={e => setLabel(e.target.value)}
-                                placeholder="e.g. A, Hello"
+                                placeholder="e.g. Hello, Thank You"
                                 className="w-full border-gray-300 rounded-md shadow-sm border p-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
 
                         <div className="flex gap-6">
-                            <label className="flex items-center gap-2 cursor-pointer">
+                            <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-slate-50 rounded">
                                 <input type="radio" name="type" className="w-4 h-4 text-blue-600" checked={recordType === "LETTER"} onChange={() => setRecordType("LETTER")} />
                                 <span>Letter</span>
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
+                            <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-slate-50 rounded">
                                 <input type="radio" name="type" className="w-4 h-4 text-blue-600" checked={recordType === "PHRASE"} onChange={() => setRecordType("PHRASE")} />
                                 <span>Phrase</span>
                             </label>
@@ -318,7 +376,7 @@ export default function DebugPage() {
                                 disabled={!isCameraRunning || isRecording}
                                 className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 shadow transition-colors"
                             >
-                                Start Record
+                                {isRecording ? "Recording..." : "Start Record"}
                             </button>
                             <button
                                 onClick={stopRecordingSafe}
@@ -329,17 +387,47 @@ export default function DebugPage() {
                             </button>
                         </div>
 
-                        <hr className="my-4" />
-
-                        <div className="flex gap-3">
-                            <button onClick={handleExport} className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors">
+                        <div className="flex gap-3 text-sm">
+                            <button onClick={handleExport} className="flex-1 py-2 border hover:bg-slate-50 rounded text-slate-700 font-medium">
                                 Export JSON
                             </button>
-                            <button onClick={handleClear} className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition-colors">
-                                Clear Data
+                            <button onClick={handleClear} className="flex-1 py-2 border hover:bg-red-50 text-red-600 rounded font-medium">
+                                Clear Local Data
                             </button>
                         </div>
                     </div>
+
+                    {/* Training Panel */}
+                    <div className="p-6 border rounded-xl bg-slate-50 shadow-inner space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <span className="w-2 h-8 bg-green-500 rounded-full"></span>
+                                Training
+                            </h2>
+                            <span className="text-xs font-mono bg-slate-200 px-2 py-1 rounded">
+                                Target: {currentConfig.fsModelDir}
+                            </span>
+                        </div>
+
+                        <p className="text-sm text-slate-600">
+                            Train a new model for <b>{currentConfig.name}</b> using: <br />
+                            <code className="text-xs bg-slate-200 px-1 rounded">{currentConfig.dataset.path}</code>
+                        </p>
+
+                        <button
+                            onClick={handleTrain}
+                            disabled={isTraining}
+                            className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg disabled:opacity-50 shadow-sm transition-all text-lg"
+                        >
+                            {isTraining ? "Training in progress..." : "Train Model Now"}
+                        </button>
+
+                        {/* Logs Terminal */}
+                        <div className="bg-slate-900 text-emerald-400 font-mono text-xs p-3 rounded-lg h-48 overflow-y-auto whitespace-pre-wrap shadow-inner">
+                            {trainingLogs.length === 0 ? <span className="text-slate-500">// Logs will appear here...</span> : trainingLogs.join("\n")}
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>

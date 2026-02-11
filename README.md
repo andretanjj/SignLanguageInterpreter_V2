@@ -18,68 +18,70 @@ Open [http://localhost:3000/interpreter](http://localhost:3000/interpreter).
 
 ---
 
+## 🌍 Multi-Language Support (ASL / BSL)
+
+SignMeUp now supports multiple sign languages! You can toggle between them using the dropdown at the top of the Interpreter or Debug pages.
+
+### How it Works
+- **ASL (American Sign Language)**: Uses the WLASL300 dataset + your custom recordings.
+- **BSL (British Sign Language)**: Uses a separate custom dataset (`bsl_dataset.json`).
+
+Each language has its own isolated model and labels:
+- ASL Model: `public/models/asl/`
+- BSL Model: `public/models/bsl/`
+
+---
+
 ## 📸 Workflow: Train Your Own Signs
 
-SignMeUp allows you to teach it *your* specific signs (e.g., "Hungry", "Bathroom", "Yes", "No") without needing a massive external dataset.
+SignMeUp allows you to teach it *your* specific signs without needing a massive external dataset.
 
 ### 1. Collect Data
-1.  Navigate to the **Phrases** tab in the Interpreter.
-2.  Click **Teach New Phrase**.
-3.  Follow the wizard:
-    *   **Name** your sign (e.g., "Hello").
-    *   **Record** yourself performing the sign.
-    *   **Save** it.
-4.  Repeat this for 5-10 examples per sign for best accuracy.
-    > **Tip**: Vary your distance, lighting, and speed slightly to make the model robust.
+1.  Navigate to **[http://localhost:3000/debug](http://localhost:3000/debug)**.
+2.  **Select the Language** you want to teach (e.g., ASL or BSL).
+3.  In the "Data Collection" panel:
+    *   Enter a **Label** (e.g., "Hello").
+    *   Click **Start Record**.
+    *   Perform the sign (move your hands!).
+    *   Click **Stop & Save**.
+4.  Repeat 5-10 times per sign.
 
-### 2. Export Dataset
-1.  In the **Phrases** tab, click **Export Dataset (JSON)**.
-2.  Save the file as `dataset.json` in the root folder of this project.
+### 2. Train Model
+You can trigger training directly from the **Debug Page**:
+1.  On the right side, find the **Training** panel.
+2.  Click **Train Model Now**.
+3.  Watch the logs. When it says "Training completed," reload the page.
 
-### 3. Train Model
-Run the training script to build a custom model from your `dataset.json`:
-
+*Alternatively, run via command line:*
 ```bash
-npm run train
+# Train ASL (default)
+npm run train -- --lang asl
+
+# Train BSL
+npm run train -- --lang bsl
 ```
 
-This command will:
-1.  Load your `dataset.json`.
-2.  Normalize and segment the data (MediaPipe landmarks).
-3.  Train a lightweight LSTM neural network.
-4.  Save the model to `public/models/signmeup/`.
-
-### 4. Run Inference
-1.  Refresh the [Interpreter Page](http://localhost:3000/interpreter).
-2.  The status should say **"Model Ready (Vision + Classifier)"**.
-3.  Perform your signs in front of the camera.
-4.  The recognized text will appear in the "Live Prediction" box.
+### 3. Run Inference
+1.  Go to the [Interpreter Page](http://localhost:3000/interpreter).
+2.  Select the correct language.
+3.  Perform your signs!
 
 ---
 
 ## 🧠 Data Collection Best Practices
 
-To get a reliable model, follow these tips when recording:
-
-- **Consistent Framing**: Keep your upper body and hands visible. Avoid moving too close or too far.
-- **Lighting**: Ensure your hands are well-lit. Backlighting (window behind you) makes hand tracking difficult.
-- **Start/End Neutral**: Start with hands down (neutral), perform the sign, and return to neutral.
-- **Variety**: Record at least 10 samples per phrase.
-    - 5x Normal speed
-    - 3x Slightly faster
-    - 2x Slightly slower
+- **Consistent Framing**: Keep your upper body and hands visible.
+- **Lighting**: Ensure your hands are well-lit. Avoid heavy backlighting.
+- **Start/End Neutral**: Start with hands down, sign, then hands down.
+- **Variety**: Record varying speeds and slight angle changes.
 
 ---
 
 ## 🛠️ Advanced (Optional): External Datasets
 
-If you want to bootstrap your model with a large dictionary (WLASL), we provide tools to import standard datasets.
+See [tools/wlasl_import/README.md](tools/wlasl_import/README.md) for instructions on importing WLASL (ASL) data.
 
-See [tools/wlasl_import/README.md](tools/wlasl_import/README.md) for instructions on how to download and process the WLASL dataset.
-
-Once processed into `wlasl_dataset.jsonl.gz`, the training script will automatically detect and merge it with your local `dataset.json`:
-
+To train with manual custom arguments (if you are a power user):
 ```bash
-# Trains on BOTH local data and WLASL if present
-npm run train
+npm run train -- --dataset my_custom_data.json --outDir public/models/experimental
 ```
