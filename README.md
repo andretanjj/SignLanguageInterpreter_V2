@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SignMeUp - Local Sign Language Recognition
 
-## Getting Started
+A privacy-focused, offline-capable web application for learning and recognizing sign language using your webcam.
 
-First, run the development server:
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+```bash
+pnpm install
+```
+> **Note**: If you see errors about `tfjs-node`, ignore them. The training script will automatically fall back to the standard JS backend.
+
+### 2. Run the App
+```bash
+pnpm dev
+```
+Open [http://localhost:3000/interpreter](http://localhost:3000/interpreter).
+
+---
+
+## 📸 Workflow: Train Your Own Signs
+
+SignMeUp allows you to teach it *your* specific signs (e.g., "Hungry", "Bathroom", "Yes", "No") without needing a massive external dataset.
+
+### 1. Collect Data
+1.  Navigate to the **Phrases** tab in the Interpreter.
+2.  Click **Teach New Phrase**.
+3.  Follow the wizard:
+    *   **Name** your sign (e.g., "Hello").
+    *   **Record** yourself performing the sign.
+    *   **Save** it.
+4.  Repeat this for 5-10 examples per sign for best accuracy.
+    > **Tip**: Vary your distance, lighting, and speed slightly to make the model robust.
+
+### 2. Export Dataset
+1.  In the **Phrases** tab, click **Export Dataset (JSON)**.
+2.  Save the file as `dataset.json` in the root folder of this project.
+
+### 3. Train Model
+Run the training script to build a custom model from your `dataset.json`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run train
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+This command will:
+1.  Load your `dataset.json`.
+2.  Normalize and segment the data (MediaPipe landmarks).
+3.  Train a lightweight LSTM neural network.
+4.  Save the model to `public/models/signmeup/`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Run Inference
+1.  Refresh the [Interpreter Page](http://localhost:3000/interpreter).
+2.  The status should say **"Model Ready (Vision + Classifier)"**.
+3.  Perform your signs in front of the camera.
+4.  The recognized text will appear in the "Live Prediction" box.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🧠 Data Collection Best Practices
 
-To learn more about Next.js, take a look at the following resources:
+To get a reliable model, follow these tips when recording:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Consistent Framing**: Keep your upper body and hands visible. Avoid moving too close or too far.
+- **Lighting**: Ensure your hands are well-lit. Backlighting (window behind you) makes hand tracking difficult.
+- **Start/End Neutral**: Start with hands down (neutral), perform the sign, and return to neutral.
+- **Variety**: Record at least 10 samples per phrase.
+    - 5x Normal speed
+    - 3x Slightly faster
+    - 2x Slightly slower
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🛠️ Advanced (Optional): External Datasets
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+If you want to bootstrap your model with a large dictionary (WLASL), we provide tools to import standard datasets.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [tools/wlasl_import/README.md](tools/wlasl_import/README.md) for instructions on how to download and process the WLASL dataset.
+
+Once processed into `wlasl_dataset.jsonl.gz`, the training script will automatically detect and merge it with your local `dataset.json`:
+
+```bash
+# Trains on BOTH local data and WLASL if present
+npm run train
+```
